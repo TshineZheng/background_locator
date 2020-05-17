@@ -2,17 +2,17 @@ package rekab.app.background_locator
 
 import android.Manifest
 import android.app.Activity
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
+import com.amap.api.location.AMapLocationClient
+import com.amap.api.location.AMapLocationClientOption
+import com.amap.api.location.AMapLocationListener
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -25,7 +25,6 @@ import io.flutter.plugin.common.PluginRegistry
 import rekab.app.background_locator.Keys.Companion.ARG_ACCURACY
 import rekab.app.background_locator.Keys.Companion.ARG_CALLBACK
 import rekab.app.background_locator.Keys.Companion.ARG_CALLBACK_DISPATCHER
-import rekab.app.background_locator.Keys.Companion.ARG_DISTANCE_FILTER
 import rekab.app.background_locator.Keys.Companion.ARG_INTERVAL
 import rekab.app.background_locator.Keys.Companion.ARG_NOTIFICATION_CALLBACK
 import rekab.app.background_locator.Keys.Companion.ARG_NOTIFICATION_ICON
@@ -45,19 +44,24 @@ import rekab.app.background_locator.Keys.Companion.NOTIFICATION_CALLBACK_HANDLE_
 import rekab.app.background_locator.Keys.Companion.SHARED_PREFERENCES_KEY
 
 
-class BackgroundLocatorPlugin()
+class BackgroundLocatorPlugin
     : MethodCallHandler, FlutterPlugin, PluginRegistry.NewIntentListener, ActivityAware {
-    private lateinit var locatorClient: FusedLocationProviderClient
+    private var locatorClient: AMapLocationClient? = null
+    private var locationListener: AMapLocationListener? = null
     private var context: Context? = null
     private var activity: Activity? = null
 
     companion object {
         @JvmStatic
+        var AMPLOCATION = "amplocation"
+
+        @JvmStatic
         private var channel: MethodChannel? = null
 
         @JvmStatic
         private fun registerLocator(context: Context,
-                                    client: FusedLocationProviderClient,
+                                    client: AMapLocationClient,
+                                    listener: AMapLocationListener,
                                     args: Map<Any, Any>,
                                     result: Result?) {
             if (IsolateHolderService.isRunning) {
@@ -84,8 +88,9 @@ class BackgroundLocatorPlugin()
 
             startIsolateService(context, settings)
 
-            client.requestLocationUpdates(getLocationRequest(settings),
-                    getLocatorPendingIndent(context))
+            client.setLocationOption(getLocationRequest(settings))
+            client.setLocationListener(listener)
+            client.startLocation()
         }
 
         @JvmStatic
@@ -116,59 +121,78 @@ class BackgroundLocatorPlugin()
             setCallbackDispatcherHandle(context, callbackHandle)
         }
 
-        @JvmStatic
-        private fun getLocatorPendingIndent(context: Context): PendingIntent {
-            val intent = Intent(context, LocatorBroadcastReceiver::class.java)
-            return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
-        }
+//        @JvmStatic
+//        private fun getLocatorPendingIndent(context: Context): PendingIntent {
+//            val intent = Intent(context, LocatorBroadcastReceiver::class.java)
+//            return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+//        }
 
         @JvmStatic
-        private fun getLocationRequest(settings: Map<*, *>): LocationRequest {
-            val locationRequest = LocationRequest()
+        private fun getLocationRequest(settings: Map<*, *>): AMapLocationClientOption {
+            val locationRequest = AMapLocationClientOption()
 
             val interval: Long = (settings[ARG_INTERVAL] as Int * 1000).toLong()
             locationRequest.interval = interval
-            locationRequest.fastestInterval = interval
-            locationRequest.maxWaitTime = interval
+//            locationRequest.fastestInterval = interval
+//            locationRequest.maxWaitTime = interval
 
             val accuracyKey = settings[ARG_ACCURACY] as Int
-            locationRequest.priority = getAccuracy(accuracyKey)
+            locationRequest.locationMode = getAccuracy(accuracyKey)
 
-            val distanceFilter = settings[ARG_DISTANCE_FILTER] as Double
-            locationRequest.smallestDisplacement = distanceFilter.toFloat()
+//            val distanceFilter = settings[ARG_DISTANCE_FILTER] as Double
+//            locationRequest.smallestDisplacement = distanceFilter.toFloat()
 
             return locationRequest
+
+//            val mOption = AMapLocationClientOption()
+//            mOption.locationMode = AMapLocationMode.Hight_Accuracy //可选，设置定位模式，可选的模式有高精度、仅设备、仅网络。默认为高精度模式
+//            mOption.isGpsFirst = false //可选，设置是否gps优先，只在高精度模式下有效。默认关闭
+//            mOption.httpTimeOut = 30000 //可选，设置网络请求超时时间。默认为30秒。在仅设备模式下无效
+//            mOption.interval = 2000 //可选，设置定位间隔。默认为2秒
+//            mOption.isNeedAddress = true //可选，设置是否返回逆地理地址信息。默认是true
+//            mOption.isOnceLocation = false //可选，设置是否单次定位。默认是false
+//            mOption.isOnceLocationLatest = false //可选，设置是否等待wifi刷新，默认为false.如果设置为true,会自动变为单次定位，持续定位时不要使用
+//            AMapLocationClientOption.setLocationProtocol(AMapLocationProtocol.HTTP) //可选， 设置网络请求的协议。可选HTTP或者HTTPS。默认为HTTP
+//            mOption.isSensorEnable = false //可选，设置是否使用传感器。默认是false
+//            mOption.isWifiScan = true //可选，设置是否开启wifi扫描。默认为true，如果设置为false会同时停止主动刷新，停止以后完全依赖于系统刷新，定位位置可能存在误差
+//            mOption.isLocationCacheEnable = true //可选，设置是否使用缓存定位，默认为true
+//            mOption.geoLanguage = AMapLocationClientOption.GeoLanguage.DEFAULT //可选，设置逆地理信息的语言，默认值为默认语言（根据所在地区选择语言）
+//
+//            return mOption
         }
 
         @JvmStatic
-        private fun getAccuracy(key: Int): Int {
+        private fun getAccuracy(key: Int): AMapLocationClientOption.AMapLocationMode {
             return when (key) {
-                0 -> LocationRequest.PRIORITY_NO_POWER
-                1 -> LocationRequest.PRIORITY_LOW_POWER
-                2 -> LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
-                3 -> LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
-                4 -> LocationRequest.PRIORITY_HIGH_ACCURACY
-                else -> LocationRequest.PRIORITY_HIGH_ACCURACY
+                0 -> AMapLocationClientOption.AMapLocationMode.Battery_Saving
+                1 -> AMapLocationClientOption.AMapLocationMode.Battery_Saving
+                2 -> AMapLocationClientOption.AMapLocationMode.Device_Sensors
+                3 -> AMapLocationClientOption.AMapLocationMode.Device_Sensors
+                4 -> AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+                else -> AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
             }
         }
 
         @JvmStatic
         private fun removeLocator(context: Context,
-                                  client: FusedLocationProviderClient) {
+                                  client: AMapLocationClient,
+                                  listener: AMapLocationListener) {
             if (!IsolateHolderService.isRunning) {
                 // The service is not running
                 Log.d("BackgroundLocatorPlugin", "Locator service is not running, nothing to stop")
                 return
             }
 
-            client.removeLocationUpdates(getLocatorPendingIndent(context))
+            client.stopLocation()
+            client.unRegisterLocationListener(listener)
             stopIsolateService(context)
         }
 
+        @Suppress("UNUSED_PARAMETER")
         @JvmStatic
         private fun isRegisterLocator(context: Context,
                                       result: Result?) {
-            if (IsolateHolderService?.isRunning) {
+            if (IsolateHolderService.isRunning) {
                 result?.success(true)
             } else {
                 result?.success(false)
@@ -207,12 +231,12 @@ class BackgroundLocatorPlugin()
             val settings = PreferencesManager.getSettings(context)
 
             val plugin = BackgroundLocatorPlugin()
-            plugin.context = context
-            plugin.locatorClient = LocationServices.getFusedLocationProviderClient(context)
+            plugin.init(context)
 
             initializeService(context, settings)
             registerLocator(context,
-                    plugin.locatorClient,
+                    plugin.locatorClient!!,
+                    plugin.locationListener!!,
                     settings, null)
         }
     }
@@ -235,12 +259,13 @@ class BackgroundLocatorPlugin()
                 PreferencesManager.saveSettings(context!!, args)
 
                 registerLocator(context!!,
-                        locatorClient,
+                        locatorClient!!,
+                        locationListener!!,
                         args,
                         result)
             }
             METHOD_PLUGIN_UN_REGISTER_LOCATION_UPDATE -> removeLocator(context!!,
-                    locatorClient)
+                    locatorClient!!, locationListener!!)
             METHOD_PLUGIN_IS_REGISTER_LOCATION_UPDATE -> isRegisterLocator(context!!,
                     result)
             else -> result.notImplemented()
@@ -252,19 +277,32 @@ class BackgroundLocatorPlugin()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        locatorClient?.onDestroy()
     }
 
     private fun onAttachedToEngine(context: Context, messenger: BinaryMessenger) {
         val plugin = BackgroundLocatorPlugin()
-        plugin.context = context
-        plugin.locatorClient = LocationServices.getFusedLocationProviderClient(context)
-
+        plugin.init(context)
         channel = MethodChannel(messenger, CHANNEL_ID)
         channel?.setMethodCallHandler(plugin)
     }
 
+    fun init(ctx: Context) {
+        this.context = ctx
+        this.locatorClient = AMapLocationClient(context)
+        this.locationListener = AMapLocationListener { location ->
+            if (location != null) {
+                val intent = Intent(context, LocatorBroadcastReceiver::class.java)
+                val bundle = Bundle()
+                bundle.putParcelable(AMPLOCATION, location)
+                intent.putExtras(bundle)
+                context!!.sendBroadcast(intent)
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent?): Boolean {
-        if(intent?.action != NOTIFICATION_ACTION) {
+        if (intent?.action != NOTIFICATION_ACTION) {
             // this is not our notification
             return false
         }

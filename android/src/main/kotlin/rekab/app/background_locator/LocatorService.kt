@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import androidx.core.app.JobIntentService
-import com.google.android.gms.location.LocationResult
+import com.amap.api.location.AMapLocation
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry.PluginRegistrantCallback;
@@ -111,8 +111,9 @@ class LocatorService : MethodChannel.MethodCallHandler, JobIntentService() {
     }
 
     override fun onHandleWork(intent: Intent) {
-        if (LocationResult.hasResult(intent)) {
-            val location = LocationResult.extractResult(intent).lastLocation
+        if (intent.hasExtra(BackgroundLocatorPlugin.AMPLOCATION)) {
+            val location = intent.getParcelableExtra<AMapLocation>(BackgroundLocatorPlugin.AMPLOCATION)
+//            val location = LocationResult.extractResult(intent).lastLocation
 
             var speedAccuracy = 0f
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
