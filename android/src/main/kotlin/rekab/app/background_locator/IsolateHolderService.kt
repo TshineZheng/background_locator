@@ -1,9 +1,6 @@
 package rekab.app.background_locator
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -77,6 +74,8 @@ class IsolateHolderService : Service() {
                 .setContentIntent(pendingIntent)
                 .build()
 
+        notification.flags = Notification.FLAG_ONGOING_EVENT
+
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
             newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
                 setReferenceCounted(false)
@@ -120,9 +119,9 @@ class IsolateHolderService : Service() {
     private fun getMainActivityClass(context: Context): Class<*>? {
         val packageName = context.packageName
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
-        val className = launchIntent.component.className
+        val className = launchIntent?.component?.className
         return try {
-            Class.forName(className)
+            Class.forName(className!!)
         } catch (e: ClassNotFoundException) {
             e.printStackTrace()
             null
