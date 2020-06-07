@@ -91,6 +91,8 @@ class BackgroundLocatorPlugin
             client.setLocationOption(getLocationRequest(settings))
             client.setLocationListener(listener)
             client.startLocation()
+
+            result?.success(true)
         }
 
         @JvmStatic
@@ -264,10 +266,13 @@ class BackgroundLocatorPlugin
                         args,
                         result)
             }
-            METHOD_PLUGIN_UN_REGISTER_LOCATION_UPDATE -> removeLocator(context!!,
-                    locatorClient!!, locationListener!!)
-            METHOD_PLUGIN_IS_REGISTER_LOCATION_UPDATE -> isRegisterLocator(context!!,
-                    result)
+            METHOD_PLUGIN_UN_REGISTER_LOCATION_UPDATE -> {
+                removeLocator(context!!, locatorClient!!, locationListener!!)
+                result.success(true)
+            }
+            METHOD_PLUGIN_IS_REGISTER_LOCATION_UPDATE -> {
+                isRegisterLocator(context!!, result)
+            }
             else -> result.notImplemented()
         }
     }
