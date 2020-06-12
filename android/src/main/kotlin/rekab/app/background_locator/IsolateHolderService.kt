@@ -98,7 +98,8 @@ class IsolateHolderService : Service() {
         if (intent == null) {
             Log.d(TAG, "start by empty intent")
             BackgroundLocatorPlugin.registerAfterBoot(this)
-        } else
+        } else {
+            Log.d(TAG, "onStartCommand action ${intent.action}")
             when (intent.action) {
                 ACTION_SHUTDOWN -> {
                     (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
@@ -126,8 +127,9 @@ class IsolateHolderService : Service() {
                     start()
                 }
             }
+        }
 
-        return START_STICKY;
+        return START_STICKY
     }
 
     private fun getMainActivityClass(context: Context): Class<*>? {
