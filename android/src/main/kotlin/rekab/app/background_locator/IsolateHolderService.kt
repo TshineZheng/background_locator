@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import io.flutter.view.FlutterNativeView
 import rekab.app.background_locator.Keys.Companion.ARG_NOTIFICATION_ICON
@@ -17,6 +18,9 @@ import rekab.app.background_locator.Keys.Companion.NOTIFICATION_ACTION
 
 class IsolateHolderService : Service() {
     companion object {
+        @JvmStatic
+        val TAG = "IsolateHolderService"
+
         @JvmStatic
         val ACTION_SHUTDOWN = "SHUTDOWN"
 
@@ -49,6 +53,7 @@ class IsolateHolderService : Service() {
 
     private fun start() {
         if (isRunning) {
+            Log.d(TAG, "AllReady Running")
             return
         }
 
@@ -89,30 +94,39 @@ class IsolateHolderService : Service() {
         isRunning = true
     }
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
-        if (intent.action == ACTION_SHUTDOWN) {
-            (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-                    if (isHeld) {
-                        release()
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) {
+            Log.d(TAG, "start by empty intent")
+            BackgroundLocatorPlugin.registerAfterBoot(this)
+        } else
+            when (intent.action) {
+                ACTION_SHUTDOWN -> {
+                    (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                        newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
+                            if (isHeld) {
+                                release()
+                            }
+                        }
                     }
+                    stopForeground(true)
+                    stopSelf()
+                    isRunning = false
+                }
+                ACTION_START -> {
+                    notificationTitle = intent.getStringExtra(ARG_NOTIFICATION_TITLE)
+                    notificationMsg = intent.getStringExtra(ARG_NOTIFICATION_MSG)
+                    val iconNameDefault = "ic_launcher"
+                    var iconName = intent.getStringExtra(ARG_NOTIFICATION_ICON)
+                    if (iconName == null || iconName.isEmpty()) {
+                        iconName = iconNameDefault
+                    }
+                    icon = resources.getIdentifier(iconName, "mipmap", packageName)
+                    wakeLockTime = intent.getIntExtra(ARG_WAKE_LOCK_TIME, 60) * 60 * 1000L
+                    Log.d(TAG, "start title:$notificationTitle msg:$notificationMsg iconName:$iconName")
+                    start()
                 }
             }
-            stopForeground(true)
-            stopSelf()
-            isRunning = false
-        } else if (intent.action == ACTION_START) {
-            notificationTitle = intent.getStringExtra(ARG_NOTIFICATION_TITLE)
-            notificationMsg = intent.getStringExtra(ARG_NOTIFICATION_MSG)
-            val iconNameDefault = "ic_launcher"
-            var iconName = intent.getStringExtra(ARG_NOTIFICATION_ICON)
-            if (iconName == null || iconName.isEmpty()) {
-                iconName = iconNameDefault
-            }
-            icon = resources.getIdentifier(iconName, "mipmap", packageName)
-            wakeLockTime = intent.getIntExtra(ARG_WAKE_LOCK_TIME, 60) * 60 * 1000L
-            start()
-        }
+
         return START_STICKY;
     }
 
